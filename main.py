@@ -6,7 +6,7 @@ import os
 import httpx
 from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
-import motor.motor_asyncio
+import pymongo
 from bson import ObjectId
 from fastapi import HTTPException
 import jwt
@@ -56,7 +56,13 @@ class ChatHistoryOut(BaseModel):
 
 @app.get("/")
 def root():
-    return {"message": "LearnStack AI FastAPI backend is running!"}
+    import traceback
+    print("[DEBUG] / root endpoint called")
+    try:
+        return {"message": "LearnStack AI FastAPI backend is running!"}
+    except Exception as e:
+        print("[ERROR] Exception in / root endpoint:", traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 async def get_gpt_response(message: str, history: list[str]) -> str:
     """Call Groq API for a response."""
@@ -77,7 +83,7 @@ async def get_gpt_response(message: str, history: list[str]) -> str:
         )
     })
     for i, msg in enumerate(history):
-        role = "user" if i % 2 == 0 else "assistant"
+        role = "user" if i % 2 == 0 : "assistant"
         messages.append({"role": role, "content": msg})
     messages.append({"role": "user", "content": message})
     data = {
@@ -105,10 +111,10 @@ async def get_gpt_response(message: str, history: list[str]) -> str:
         except Exception as e:
             return f"[Error: {str(e)}]"
 
-# MongoDB setup
+# MongoDB setup (sync for Vercel compatibility)
 MONGODB_URI = os.getenv("MONGODB_URI", "mongodb://localhost:27017")
 MONGODB_DB = os.getenv("MONGODB_DB", "learnstackai")
-mongo_client = motor.motor_asyncio.AsyncIOMotorClient(MONGODB_URI)
+mongo_client = pymongo.MongoClient(MONGODB_URI)
 db = mongo_client[MONGODB_DB]
 
 # JWT configuration
@@ -137,36 +143,43 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
 # Example: Auth endpoint to get a token (for demo, no real user check)
 @app.post("/auth/token")
 async def login_demo(username: str):
-    # In production, check username/password from DB
-    token = create_jwt_token({"username": username})
-    return {"access_token": token}
+    import traceback
+    print(f"[DEBUG] /auth/token endpoint called with username={username}")
+    try:
+        token = create_jwt_token({"username": username})
+        return {"access_token": token}
+    except Exception as e:
+        print("[ERROR] Exception in /auth/token endpoint:", traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 # Save chat to MongoDB after each chat
 @app.post("/chat", response_model=ChatResponse, dependencies=[Depends(get_current_user)])
-async def chat_endpoint(chat: ChatRequest):
+def chat_endpoint(chat: ChatRequest):
+    import traceback
+    print(f"[DEBUG] /chat endpoint called with message={chat.message}")
     try:
-        reply = await get_gpt_response(chat.message, chat.history)
+        reply = get_gpt_response(chat.message, chat.history)
         new_history = chat.history + [chat.message, reply]
         chat_doc = {
             "history": new_history,
             "last_message": chat.message,
             "reply": reply
         }
-        result = await db.chats.insert_one(chat_doc)
+        result = db.chats.insert_one(chat_doc)
+        print(f"[DEBUG] Chat inserted with id {result.inserted_id}")
         return ChatResponse(reply=reply, history=new_history)
     except Exception as e:
-        import traceback
-        # print('Error in /chat endpoint:', traceback.format_exc())
+        print("[ERROR] Exception in /chat endpoint:", traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 # Get all chat histories
 @app.get("/chats", response_model=list[ChatHistoryOut], dependencies=[Depends(get_current_user)])
-async def get_all_chats():
+def get_all_chats():
     import traceback
     print("[DEBUG] /chats endpoint called")
     chats = []
     try:
-        async for doc in db.chats.find().sort("_id", -1):
+        for doc in db.chats.find().sort("_id", -1):
             chats.append(ChatHistoryOut.from_mongo(doc))
         print(f"[DEBUG] Retrieved {len(chats)} chats from DB")
         return chats
@@ -176,11 +189,11 @@ async def get_all_chats():
 
 # Get a single chat by ID
 @app.get("/chats/{chat_id}", response_model=ChatHistoryOut, dependencies=[Depends(get_current_user)])
-async def get_chat(chat_id: str):
+def get_chat(chat_id: str):
     import traceback
     print(f"[DEBUG] /chats/{{chat_id}} endpoint called with chat_id={chat_id}")
     try:
-        doc = await db.chats.find_one({"_id": ObjectId(chat_id)})
+        doc = db.chats.find_one({"_id": ObjectId(chat_id)})
         if not doc:
             print(f"[DEBUG] Chat with id {chat_id} not found in DB")
             raise HTTPException(status_code=404, detail="Chat not found")
@@ -192,11 +205,11 @@ async def get_chat(chat_id: str):
 
 # Delete a chat by ID
 @app.delete("/chats/{chat_id}", dependencies=[Depends(get_current_user)])
-async def delete_chat(chat_id: str):
+def delete_chat(chat_id: str):
     import traceback
     print(f"[DEBUG] /chats/{{chat_id}} DELETE endpoint called with chat_id={chat_id}")
     try:
-        result = await db.chats.delete_one({"_id": ObjectId(chat_id)})
+        result = db.chats.delete_one({"_id": ObjectId(chat_id)})
         if result.deleted_count == 0:
             print(f"[DEBUG] Chat with id {chat_id} not found for deletion")
             raise HTTPException(status_code=404, detail="Chat not found")
@@ -208,8 +221,15 @@ async def delete_chat(chat_id: str):
 
 # Delete all chats
 @app.delete("/chats", dependencies=[Depends(get_current_user)])
-async def delete_all_chats():
-    await db.chats.delete_many({})
-    return {"status": "all deleted"}
+def delete_all_chats():
+    import traceback
+    print("[DEBUG] /chats DELETE endpoint called (delete all)")
+    try:
+        db.chats.delete_many({})
+        print("[DEBUG] All chats deleted successfully")
+        return {"status": "all deleted"}
+    except Exception as e:
+        print("[ERROR] Exception in /chats DELETE endpoint:", traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 
