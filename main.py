@@ -177,10 +177,18 @@ async def get_all_chats():
 # Get a single chat by ID
 @app.get("/chats/{chat_id}", response_model=ChatHistoryOut, dependencies=[Depends(get_current_user)])
 async def get_chat(chat_id: str):
-    doc = await db.chats.find_one({"_id": ObjectId(chat_id)})
-    if not doc:
-        raise HTTPException(status_code=404, detail="Chat not found")
-    return ChatHistoryOut.from_mongo(doc)
+    import traceback
+    print(f"[DEBUG] /chats/{{chat_id}} endpoint called with chat_id={chat_id}")
+    try:
+        doc = await db.chats.find_one({"_id": ObjectId(chat_id)})
+        if not doc:
+            print(f"[DEBUG] Chat with id {chat_id} not found in DB")
+            raise HTTPException(status_code=404, detail="Chat not found")
+        print(f"[DEBUG] Chat with id {chat_id} found, returning data")
+        return ChatHistoryOut.from_mongo(doc)
+    except Exception as e:
+        print("[ERROR] Exception in /chats/{chat_id} endpoint:", traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 # Delete a chat by ID
 @app.delete("/chats/{chat_id}", dependencies=[Depends(get_current_user)])
