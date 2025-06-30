@@ -1,5 +1,3 @@
-print('>>> FastAPI app is starting...')
-
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -17,13 +15,12 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from datetime import datetime, timedelta
 from fastapi import Body
 
-print('>>> All imports successful')
 
 app = FastAPI()
 
 # Load environment variables from .env file (absolute path for reliability)
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '.env'))
-print('>>> .env loaded')
+
 
 # Allow CORS for local frontend development
 app.add_middleware(
@@ -159,7 +156,7 @@ async def chat_endpoint(chat: ChatRequest):
         return ChatResponse(reply=reply, history=new_history)
     except Exception as e:
         import traceback
-        print('Error in /chat endpoint:', traceback.format_exc())
+        # print('Error in /chat endpoint:', traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 # Get all chat histories
