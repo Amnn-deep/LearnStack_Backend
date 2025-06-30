@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+pydantic
+httpx
+python-dotenv
+motor
+pymongo
+bson
+pyjwt
