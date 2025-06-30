@@ -162,10 +162,17 @@ async def chat_endpoint(chat: ChatRequest):
 # Get all chat histories
 @app.get("/chats", response_model=list[ChatHistoryOut], dependencies=[Depends(get_current_user)])
 async def get_all_chats():
+    import traceback
+    print("[DEBUG] /chats endpoint called")
     chats = []
-    async for doc in db.chats.find().sort("_id", -1):
-        chats.append(ChatHistoryOut.from_mongo(doc))
-    return chats
+    try:
+        async for doc in db.chats.find().sort("_id", -1):
+            chats.append(ChatHistoryOut.from_mongo(doc))
+        print(f"[DEBUG] Retrieved {len(chats)} chats from DB")
+        return chats
+    except Exception as e:
+        print("[ERROR] Exception in /chats endpoint:", traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 # Get a single chat by ID
 @app.get("/chats/{chat_id}", response_model=ChatHistoryOut, dependencies=[Depends(get_current_user)])
