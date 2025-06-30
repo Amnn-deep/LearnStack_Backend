@@ -80,7 +80,7 @@ async def get_gpt_response(message: str, history: list[str]) -> str:
     messages.append({
         "role": "system",
         "content": (
-            "You are an AI assistant. Answer user questions helpfully, accurately, and conversationally. If the user asks for study material, generate structured learning content. Otherwise, respond naturally."
+            "You are an AI assistant. Answer user questions helpfully, accurately, and conversationally. If the user asks for study material, generate structured learning content. Otherwise, respond naturally. always give quality answer in 200words"
         )
     })
     for i, msg in enumerate(history):
