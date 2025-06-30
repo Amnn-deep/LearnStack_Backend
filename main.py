@@ -193,10 +193,18 @@ async def get_chat(chat_id: str):
 # Delete a chat by ID
 @app.delete("/chats/{chat_id}", dependencies=[Depends(get_current_user)])
 async def delete_chat(chat_id: str):
-    result = await db.chats.delete_one({"_id": ObjectId(chat_id)})
-    if result.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="Chat not found")
-    return {"status": "deleted"}
+    import traceback
+    print(f"[DEBUG] /chats/{{chat_id}} DELETE endpoint called with chat_id={chat_id}")
+    try:
+        result = await db.chats.delete_one({"_id": ObjectId(chat_id)})
+        if result.deleted_count == 0:
+            print(f"[DEBUG] Chat with id {chat_id} not found for deletion")
+            raise HTTPException(status_code=404, detail="Chat not found")
+        print(f"[DEBUG] Chat with id {chat_id} deleted successfully")
+        return {"status": "deleted"}
+    except Exception as e:
+        print("[ERROR] Exception in /chats/{chat_id} DELETE endpoint:", traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 # Delete all chats
 @app.delete("/chats", dependencies=[Depends(get_current_user)])
