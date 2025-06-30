@@ -14,6 +14,7 @@ from fastapi import Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from datetime import datetime, timedelta
 from fastapi import Body
+import asyncio
 
 
 app = FastAPI()
@@ -158,7 +159,7 @@ def chat_endpoint(chat: ChatRequest):
     import traceback
     print(f"[DEBUG] /chat endpoint called with message={chat.message}")
     try:
-        reply = get_gpt_response(chat.message, chat.history)
+        reply = asyncio.run(get_gpt_response(chat.message, chat.history))
         new_history = chat.history + [chat.message, reply]
         chat_doc = {
             "history": new_history,
