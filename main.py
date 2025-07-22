@@ -34,8 +34,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Mount static files (adjust 'frontend' to your build folder)
-app.mount("/static", StaticFiles(directory="frontend/static"), name="static")
+# Only mount static files if the directory exists (for Vercel compatibility)
+import pathlib
+static_dir = pathlib.Path("frontend/static")
+if static_dir.exists():
+    app.mount("/static", StaticFiles(directory="frontend/static"), name="static")
 
 class ChatRequest(BaseModel):
     id: Optional[str] = None
@@ -90,7 +93,7 @@ async def get_gpt_response(message: str, history: list[str]) -> str:
         )
     })
     for i, msg in enumerate(history):
-        role = "user" if i % 2 == 0 else "assistant"
+        role = "user" if i % 2 == 0 : "assistant"
         messages.append({"role": role, "content": msg})
     messages.append({"role": "user", "content": message})
     data = {
