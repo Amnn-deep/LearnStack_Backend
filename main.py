@@ -97,7 +97,7 @@ async def get_gpt_response(message: str, history: list[str]) -> str:
         )
     })
     for i, msg in enumerate(history):
-        role = "user" if i % 2 == 0 else "assistant"
+        role = "user" if i % 2 == 0 : "assistant"
         messages.append({"role": role, "content": msg})
     messages.append({"role": "user", "content": message})
     data = {
@@ -160,9 +160,9 @@ async def login_demo(login: LoginRequest):
     import traceback
     print(f"[DEBUG] /auth/token endpoint called with username={login.username}")
     try:
-        # Demo: hardcoded user check (replace with real user DB check in production)
-        if login.username != "admin" or login.password != "admin123":
-            raise HTTPException(status_code=401, detail="Invalid username or password")
+        # Allow any username and password (for demo, not secure)
+        if not login.username or not login.password:
+            raise HTTPException(status_code=400, detail="Username and password required")
         token = create_jwt_token({"username": login.username})
         return {"access_token": token}
     except Exception as e:
