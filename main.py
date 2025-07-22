@@ -64,6 +64,10 @@ class ChatHistoryOut(BaseModel):
             reply=doc["reply"]
         )
 
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
 @app.get("/")
 def root():
     import traceback
@@ -93,7 +97,7 @@ async def get_gpt_response(message: str, history: list[str]) -> str:
         )
     })
     for i, msg in enumerate(history):
-        role = "user" if i % 2 == 0 else "assistant"
+        role = "user" if i % 2 == 0 : "assistant"
         messages.append({"role": role, "content": msg})
     messages.append({"role": "user", "content": message})
     data = {
@@ -150,13 +154,16 @@ def decode_jwt_token(token: str) -> dict:
 def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
     return decode_jwt_token(credentials.credentials)
 
-# Example: Auth endpoint to get a token (for demo, no real user check)
+# Example: Auth endpoint to get a token (for demo, now requires username and password)
 @app.post("/auth/token")
-async def login_demo(username: str):
+async def login_demo(login: LoginRequest):
     import traceback
-    print(f"[DEBUG] /auth/token endpoint called with username={username}")
+    print(f"[DEBUG] /auth/token endpoint called with username={login.username}")
     try:
-        token = create_jwt_token({"username": username})
+        # Demo: hardcoded user check (replace with real user DB check in production)
+        if login.username != "admin" or login.password != "admin123":
+            raise HTTPException(status_code=401, detail="Invalid username or password")
+        token = create_jwt_token({"username": login.username})
         return {"access_token": token}
     except Exception as e:
         print("[ERROR] Exception in /auth/token endpoint:", traceback.format_exc())
