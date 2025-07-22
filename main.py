@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from typing import List, Optional
 import os
 import httpx
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
 from dotenv import load_dotenv
 import pymongo
 from bson import ObjectId
@@ -16,6 +16,7 @@ from datetime import datetime, timedelta
 from fastapi import Body
 import asyncio
 from fastapi import Query
+from fastapi.staticfiles import StaticFiles
 
 
 app = FastAPI()
@@ -32,6 +33,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Mount static files (adjust 'frontend' to your build folder)
+app.mount("/static", StaticFiles(directory="frontend/static"), name="static")
 
 class ChatRequest(BaseModel):
     id: Optional[str] = None
@@ -86,7 +90,7 @@ async def get_gpt_response(message: str, history: list[str]) -> str:
         )
     })
     for i, msg in enumerate(history):
-        role = "user" if i % 2 == 0 else "assistant"
+        role = "user" if i % 2 == 0 : "assistant"
         messages.append({"role": role, "content": msg})
     messages.append({"role": "user", "content": message})
     data = {
@@ -296,5 +300,13 @@ def quick_action(term: str = Query(..., description="The quick action term to se
     except Exception as e:
         print("[ERROR] Exception in /quick-action endpoint:", traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+# Catch-all route for frontend (must be after all API routes)
+@app.get("/{full_path:path}")
+def serve_frontend(full_path: str):
+    index_path = os.path.join("frontend", "index.html")
+    if os.path.exists(index_path):
+        return FileResponse(index_path)
+    return {"detail": "Frontend not found"}, 404
 
 
