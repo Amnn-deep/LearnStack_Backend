@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional
 import os
 import httpx
 from fastapi.responses import JSONResponse
@@ -15,6 +15,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from datetime import datetime, timedelta
 from fastapi import Body
 import asyncio
+from fastapi import Query
 
 
 app = FastAPI()
@@ -33,6 +34,7 @@ app.add_middleware(
 )
 
 class ChatRequest(BaseModel):
+    id: Optional[str] = None
     message: str
     history: List[str] = []
 
@@ -154,21 +156,48 @@ async def login_demo(username: str):
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 # Save chat to MongoDB after each chat
-@app.post("/chat", response_model=ChatResponse, dependencies=[Depends(get_current_user)])
+@app.post("/chat", dependencies=[Depends(get_current_user)])
 def chat_endpoint(chat: ChatRequest):
     import traceback
-    print(f"[DEBUG] /chat endpoint called with message={chat.message}")
+    print(f"[DEBUG] /chat endpoint called with message={chat.message}, id={chat.id}")
     try:
         reply = asyncio.run(get_gpt_response(chat.message, chat.history))
-        new_history = chat.history + [chat.message, reply]
-        chat_doc = {
-            "history": new_history,
-            "last_message": chat.message,
-            "reply": reply
-        }
-        result = db.chats.insert_one(chat_doc)
-        print(f"[DEBUG] Chat inserted with id {result.inserted_id}")
-        return ChatResponse(reply=reply, history=new_history)
+        chat_id = None
+        if chat.id:
+            # Append to existing chat if id is provided
+            from bson import ObjectId
+            doc = db.chats.find_one({"_id": ObjectId(chat.id)})
+            if doc:
+                new_history = doc["history"] + [chat.message, reply]
+                db.chats.update_one(
+                    {"_id": ObjectId(chat.id)},
+                    {"$set": {"history": new_history, "last_message": chat.message, "reply": reply}}
+                )
+                chat_id = chat.id
+                print(f"[DEBUG] Chat with id {chat.id} appended successfully")
+            else:
+                print(f"[DEBUG] Chat with id {chat.id} not found for append, creating new chat instead.")
+                new_history = [chat.message, reply]
+                chat_doc = {
+                    "history": new_history,
+                    "last_message": chat.message,
+                    "reply": reply
+                }
+                result = db.chats.insert_one(chat_doc)
+                chat_id = str(result.inserted_id)
+                print(f"[DEBUG] Chat inserted with id {result.inserted_id}")
+        else:
+            # Create new chat
+            new_history = [chat.message, reply]
+            chat_doc = {
+                "history": new_history,
+                "last_message": chat.message,
+                "reply": reply
+            }
+            result = db.chats.insert_one(chat_doc)
+            chat_id = str(result.inserted_id)
+            print(f"[DEBUG] Chat inserted with id {result.inserted_id}")
+        return {"reply": reply, "history": new_history, "chat_id": chat_id}
     except Exception as e:
         print("[ERROR] Exception in /chat endpoint:", traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
@@ -231,6 +260,41 @@ def delete_all_chats():
         return {"status": "all deleted"}
     except Exception as e:
         print("[ERROR] Exception in /chats DELETE endpoint:", traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+@app.post("/quick-action", dependencies=[Depends(get_current_user)])
+def quick_action(term: str = Query(..., description="The quick action term to search and answer"), chat_id: str = None):
+    import traceback
+    print(f"[DEBUG] /quick-action endpoint called with term={term}, chat_id={chat_id}")
+    try:
+        # If chat_id is provided, append to that chat, else create new
+        reply = asyncio.run(get_gpt_response(term, []))
+        new_history = [term, reply]
+        used_chat_id = None
+        if chat_id:
+            from bson import ObjectId
+            doc = db.chats.find_one({"_id": ObjectId(chat_id)})
+            if doc:
+                new_history = doc["history"] + [term, reply]
+                db.chats.update_one(
+                    {"_id": ObjectId(chat_id)},
+                    {"$set": {"history": new_history, "last_message": term, "reply": reply}}
+                )
+                used_chat_id = chat_id
+                print(f"[DEBUG] Quick action appended to chat {chat_id}")
+            else:
+                chat_doc = {"history": new_history, "last_message": term, "reply": reply}
+                result = db.chats.insert_one(chat_doc)
+                used_chat_id = str(result.inserted_id)
+                print(f"[DEBUG] Quick action created new chat {used_chat_id}")
+        else:
+            chat_doc = {"history": new_history, "last_message": term, "reply": reply}
+            result = db.chats.insert_one(chat_doc)
+            used_chat_id = str(result.inserted_id)
+            print(f"[DEBUG] Quick action created new chat {used_chat_id}")
+        return {"reply": reply, "history": new_history, "chat_id": used_chat_id}
+    except Exception as e:
+        print("[ERROR] Exception in /quick-action endpoint:", traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 
