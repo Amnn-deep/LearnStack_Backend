@@ -93,7 +93,7 @@ async def get_gpt_response(message: str, history: list[str]) -> str:
         )
     })
     for i, msg in enumerate(history):
-        role = "user" if i % 2 == 0 : "assistant"
+        role = "user" if i % 2 == 0 else "assistant"
         messages.append({"role": role, "content": msg})
     messages.append({"role": "user", "content": message})
     data = {
